@@ -6,7 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, SlidersHorizontal, ChevronDown, ChevronUp, Filter, X, ExternalLink, RefreshCw } from "lucide-react"
+import {
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  X,
+  ExternalLink,
+  RefreshCw,
+  Plus,
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +94,9 @@ const columns = [
   { id: "features", label: "Features", always: false },
 ]
 
+// Number of models to load initially and with each "Load More" click
+const MODELS_PER_PAGE = 10
+
 export default function PricingTable() {
   const [modelData, setModelData] = useState<ModelData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -97,6 +110,7 @@ export default function PricingTable() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [displayLimit, setDisplayLimit] = useState(MODELS_PER_PAGE)
 
   const isMobile = useMobile()
 
@@ -144,6 +158,8 @@ export default function PricingTable() {
 
       setModelData(transformedData)
       setLastUpdated(new Date())
+      // Reset display limit when fetching new data
+      setDisplayLimit(MODELS_PER_PAGE)
     } catch (err) {
       console.error("Error fetching models:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch models")
@@ -211,6 +227,11 @@ export default function PricingTable() {
     setVisibleColumns(columns.filter((col) => col.always || window.innerWidth >= 768).map((col) => col.id))
   }, [])
 
+  // Reset display limit when search query or filters change
+  useEffect(() => {
+    setDisplayLimit(MODELS_PER_PAGE)
+  }, [debouncedSearchQuery, activeFilters])
+
   // Toggle keep status for a model
   const toggleKeep = (id: string) => {
     setModelData((prev) => prev.map((model) => (model.id === id ? { ...model, keep: !model.keep } : model)))
@@ -225,28 +246,13 @@ export default function PricingTable() {
     const matchesSearch =
       model.name.toLowerCase().includes(searchLower) ||
       model.provider.toLowerCase().includes(searchLower) ||
-      model.features.some((feature) => feature.toLowerCase().includes(searchLower)) ||
-      model.description.toLowerCase().includes(searchLower)
+      model.features.some((feature) => feature.toLowerCase().includes(searchLower))
 
     // Check if model matches active provider filters
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
 
     return matchesSearch && matchesProviderFilter
   })
-
-  // Get unique providers for filtering
-  const providers = Array.from(new Set(modelData.map((model) => model.provider)))
-
-  // Toggle provider filter
-  const toggleProviderFilter = (provider: string) => {
-    setActiveFilters((prev) => (prev.includes(provider) ? prev.filter((p) => p !== provider) : [...prev, provider]))
-  }
-
-  // Clear all filters
-  const clearFilters = () => {
-    setActiveFilters([])
-    setSearchQuery("")
-  }
 
   // Sort models based on sort configuration
   const sortedModels = [...filteredModels].sort((a, b) => {
@@ -284,6 +290,29 @@ export default function PricingTable() {
 
     return 0
   })
+
+  // Get models to display with pagination
+  const displayedModels = sortedModels.slice(0, displayLimit)
+  const hasMoreModels = sortedModels.length > displayLimit
+
+  // Load more models
+  const loadMoreModels = () => {
+    setDisplayLimit((prev) => prev + MODELS_PER_PAGE)
+  }
+
+  // Get unique providers for filtering
+  const providers = Array.from(new Set(modelData.map((model) => model.provider)))
+
+  // Toggle provider filter
+  const toggleProviderFilter = (provider: string) => {
+    setActiveFilters((prev) => (prev.includes(provider) ? prev.filter((p) => p !== provider) : [...prev, provider]))
+  }
+
+  // Clear all filters
+  const clearFilters = () => {
+    setActiveFilters([])
+    setSearchQuery("")
+  }
 
   // Helper function to parse context window sizes
   function parseContextSize(sizeStr: string): number {
@@ -506,143 +535,165 @@ export default function PricingTable() {
         </div>
       ) : isMobile ? (
         // Mobile card view
-        <div className="grid grid-cols-1 gap-4">
-          {sortedModels.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No models found matching your search</div>
-          ) : (
-            sortedModels.map((model) => (
-              <Card key={model.id} className={`p-4 ${model.keep ? "border-primary bg-primary/5" : ""}`}>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id={`keep-mobile-${model.id}`}
-                      checked={model.keep}
-                      onCheckedChange={() => toggleKeep(model.id)}
-                    />
-                    <div>
-                      {renderModelName(model, true)}
-                      <p className="text-sm text-muted-foreground">{model.provider}</p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            {displayedModels.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No models found matching your search</div>
+            ) : (
+              displayedModels.map((model) => (
+                <Card key={model.id} className={`p-4 ${model.keep ? "border-primary bg-primary/5" : ""}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`keep-mobile-${model.id}`}
+                        checked={model.keep}
+                        onCheckedChange={() => toggleKeep(model.id)}
+                      />
+                      <div>
+                        {renderModelName(model, true)}
+                        <p className="text-sm text-muted-foreground">{model.provider}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium font-mono">
+                        {visibleColumns.includes("inputCost") && <div>In: {model.inputCost}</div>}
+                        {visibleColumns.includes("outputCost") && <div>Out: {model.outputCost}</div>}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium font-mono">
-                      {visibleColumns.includes("inputCost") && <div>In: {model.inputCost}</div>}
-                      {visibleColumns.includes("outputCost") && <div>Out: {model.outputCost}</div>}
+
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm ml-6">
+                    {visibleColumns.includes("contextWindow") && (
+                      <>
+                        <div className="text-muted-foreground">Context:</div>
+                        <div className="font-mono">{model.contextWindow}</div>
+                      </>
+                    )}
+
+                    {visibleColumns.includes("rateLimit") && (
+                      <>
+                        <div className="text-muted-foreground">Rate Limit:</div>
+                        <div className="font-mono">{model.rateLimit}</div>
+                      </>
+                    )}
+                  </div>
+
+                  {visibleColumns.includes("features") && model.features.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1 ml-6">
+                      {model.features.map((feature, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
                     </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm ml-6">
-                  {visibleColumns.includes("contextWindow") && (
-                    <>
-                      <div className="text-muted-foreground">Context:</div>
-                      <div className="font-mono">{model.contextWindow}</div>
-                    </>
                   )}
 
-                  {visibleColumns.includes("rateLimit") && (
-                    <>
-                      <div className="text-muted-foreground">Rate Limit:</div>
-                      <div className="font-mono">{model.rateLimit}</div>
-                    </>
-                  )}
-                </div>
+                  <p className="text-xs text-muted-foreground mt-2 ml-6 line-clamp-2">{model.description}</p>
+                </Card>
+              ))
+            )}
+          </div>
 
-                {visibleColumns.includes("features") && model.features.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1 ml-6">
-                    {model.features.map((feature, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs">
-                        {feature}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground mt-2 ml-6 line-clamp-2">{model.description}</p>
-              </Card>
-            ))
+          {hasMoreModels && (
+            <div className="flex justify-center mt-4">
+              <Button variant="outline" onClick={loadMoreModels} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Load More Models
+              </Button>
+            </div>
           )}
         </div>
       ) : (
         // Desktop table view
-        <div className="rounded-md border overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columns.map(
-                    (column) =>
-                      visibleColumns.includes(column.id) && (
-                        <TableHead
-                          key={column.id}
-                          className={`cursor-pointer hover:bg-muted/50 ${column.id === "keep" ? "w-[60px]" : ""}`}
-                          onClick={() => requestSort(column.id)}
-                        >
-                          <div className="flex items-center">
-                            {column.label}
-                            {renderSortIndicator(column.id)}
-                          </div>
-                        </TableHead>
-                      ),
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedModels.length === 0 ? (
+        <div className="space-y-4">
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={visibleColumns.length} className="text-center py-6">
-                      No models found matching your search
-                    </TableCell>
+                    {columns.map(
+                      (column) =>
+                        visibleColumns.includes(column.id) && (
+                          <TableHead
+                            key={column.id}
+                            className={`cursor-pointer hover:bg-muted/50 ${column.id === "keep" ? "w-[60px]" : ""}`}
+                            onClick={() => requestSort(column.id)}
+                          >
+                            <div className="flex items-center">
+                              {column.label}
+                              {renderSortIndicator(column.id)}
+                            </div>
+                          </TableHead>
+                        ),
+                    )}
                   </TableRow>
-                ) : (
-                  sortedModels.map((model) => (
-                    <TableRow key={model.id} className={`${model.keep ? "bg-primary/5 sticky top-0 z-10" : ""}`}>
-                      {visibleColumns.includes("keep") && (
-                        <TableCell className="w-[60px]">
-                          <Checkbox
-                            id={`keep-${model.id}`}
-                            checked={model.keep}
-                            onCheckedChange={() => toggleKeep(model.id)}
-                          />
-                        </TableCell>
-                      )}
-                      {visibleColumns.includes("name") && <TableCell>{renderModelName(model)}</TableCell>}
-                      {visibleColumns.includes("provider") && <TableCell>{model.provider}</TableCell>}
-                      {visibleColumns.includes("contextWindow") && (
-                        <TableCell className="font-mono">{model.contextWindow}</TableCell>
-                      )}
-                      {visibleColumns.includes("inputCost") && (
-                        <TableCell className="font-mono">{model.inputCost}</TableCell>
-                      )}
-                      {visibleColumns.includes("outputCost") && (
-                        <TableCell className="font-mono">{model.outputCost}</TableCell>
-                      )}
-                      {visibleColumns.includes("rateLimit") && (
-                        <TableCell className="font-mono">{model.rateLimit}</TableCell>
-                      )}
-                      {visibleColumns.includes("features") && (
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {model.features.map((feature, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
-                                {feature}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                      )}
+                </TableHeader>
+                <TableBody>
+                  {displayedModels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={visibleColumns.length} className="text-center py-6">
+                        No models found matching your search
+                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    displayedModels.map((model) => (
+                      <TableRow key={model.id} className={`${model.keep ? "bg-primary/5 sticky top-0 z-10" : ""}`}>
+                        {visibleColumns.includes("keep") && (
+                          <TableCell className="w-[60px]">
+                            <Checkbox
+                              id={`keep-${model.id}`}
+                              checked={model.keep}
+                              onCheckedChange={() => toggleKeep(model.id)}
+                            />
+                          </TableCell>
+                        )}
+                        {visibleColumns.includes("name") && <TableCell>{renderModelName(model)}</TableCell>}
+                        {visibleColumns.includes("provider") && <TableCell>{model.provider}</TableCell>}
+                        {visibleColumns.includes("contextWindow") && (
+                          <TableCell className="font-mono">{model.contextWindow}</TableCell>
+                        )}
+                        {visibleColumns.includes("inputCost") && (
+                          <TableCell className="font-mono">{model.inputCost}</TableCell>
+                        )}
+                        {visibleColumns.includes("outputCost") && (
+                          <TableCell className="font-mono">{model.outputCost}</TableCell>
+                        )}
+                        {visibleColumns.includes("rateLimit") && (
+                          <TableCell className="font-mono">{model.rateLimit}</TableCell>
+                        )}
+                        {visibleColumns.includes("features") && (
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {model.features.map((feature, idx) => (
+                                <Badge key={idx} variant="secondary" className="text-xs">
+                                  {feature}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
+
+          {hasMoreModels && (
+            <div className="flex justify-center mt-4">
+              <Button variant="outline" onClick={loadMoreModels} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Load More Models
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground gap-2">
         <div>
-          Showing {sortedModels.length} of {modelData.length} models
+          Showing {displayedModels.length} of {sortedModels.length} models
         </div>
         <div className="flex items-center gap-1">
           {lastUpdated && <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>}
