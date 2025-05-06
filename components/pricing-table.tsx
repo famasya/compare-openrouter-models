@@ -16,6 +16,7 @@ import {
   ExternalLink,
   RefreshCw,
   Plus,
+  Github,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -443,6 +444,17 @@ export default function PricingTable() {
               <X className="h-4 w-4" />
             </Button>
           )}
+
+          <a
+            href="https://github.com/famasya/v0-openrouter-models"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center"
+          >
+            <Button variant="outline" size="icon" title="View on GitHub">
+              <Github className="h-4 w-4" />
+            </Button>
+          </a>
         </div>
       </div>
 
@@ -686,6 +698,16 @@ export default function PricingTable() {
           {lastUpdated && <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>}
           <span className="hidden sm:inline">•</span>
           <span className="hidden sm:inline">Token costs are per 1K tokens</span>
+          <span className="hidden sm:inline">•</span>
+          <a
+            href="https://github.com/famasya/v0-openrouter-models"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+          >
+            <Github className="h-3 w-3" />
+            <span>GitHub</span>
+          </a>
         </div>
       </div>
     </div>
