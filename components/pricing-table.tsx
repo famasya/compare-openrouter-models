@@ -75,14 +75,13 @@ interface ModelData {
   contextWindow: string
   inputCost: string
   outputCost: string
-  rateLimit: string
   features: string[]
   keep: boolean
   description: string
   modalities: string[]
 }
 
-// Column configuration
+// Column configuration - Removed rate limit column
 const columns = [
   { id: "keep", label: "Keep", always: true },
   { id: "name", label: "Model", always: true },
@@ -90,7 +89,6 @@ const columns = [
   { id: "contextWindow", label: "Context", always: false },
   { id: "inputCost", label: "Input Cost", always: true },
   { id: "outputCost", label: "Output Cost", always: true },
-  { id: "rateLimit", label: "Rate Limit", always: false },
   { id: "features", label: "Features", always: false },
 ]
 
@@ -148,7 +146,6 @@ export default function PricingTable() {
           contextWindow,
           inputCost: formatPrice(model.pricing.prompt),
           outputCost: formatPrice(model.pricing.completion),
-          rateLimit: "Varies", // This information isn't directly available in the API
           features,
           keep: false,
           description: model.description,
@@ -351,21 +348,21 @@ export default function PricingTable() {
     )
   }
 
-  // Render model name with link
+  // Render model name with link - Updated for consistent icon positioning
   const renderModelName = (model: ModelData, isCard = false) => {
     return (
-      <a
-        href={model.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`font-mono inline-flex items-center gap-1 hover:text-primary hover:underline ${
-          isCard ? "font-medium text-base" : "font-medium"
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {model.name}
-        <ExternalLink className="h-3 w-3" />
-      </a>
+      <div className={`flex items-center gap-1 ${isCard ? "font-medium text-base" : "font-medium"}`}>
+        <a
+          href={model.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono hover:text-primary hover:underline inline-flex items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {model.name}
+        </a>
+        <ExternalLink className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
+      </div>
     )
   }
 
@@ -407,7 +404,7 @@ export default function PricingTable() {
                 </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="bg-white overflow-y-scroll h-96">
               {providers.map((provider) => (
                 <DropdownMenuCheckboxItem
                   key={provider}
@@ -569,13 +566,6 @@ export default function PricingTable() {
                         <div className="font-mono">{model.contextWindow}</div>
                       </>
                     )}
-
-                    {visibleColumns.includes("rateLimit") && (
-                      <>
-                        <div className="text-muted-foreground">Rate Limit:</div>
-                        <div className="font-mono">{model.rateLimit}</div>
-                      </>
-                    )}
                   </div>
 
                   {visibleColumns.includes("features") && model.features.length > 0 && (
@@ -657,9 +647,6 @@ export default function PricingTable() {
                         )}
                         {visibleColumns.includes("outputCost") && (
                           <TableCell className="font-mono">{model.outputCost}</TableCell>
-                        )}
-                        {visibleColumns.includes("rateLimit") && (
-                          <TableCell className="font-mono">{model.rateLimit}</TableCell>
                         )}
                         {visibleColumns.includes("features") && (
                           <TableCell>
