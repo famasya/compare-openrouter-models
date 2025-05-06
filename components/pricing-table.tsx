@@ -106,6 +106,7 @@ export default function PricingTable() {
     direction: "ascending" | "descending"
   }>({ key: "inputCost", direction: "ascending" }) // Default sort by input cost
   const [activeFilters, setActiveFilters] = useState<string[]>([])
+  const [filterOutFree, setFilterOutFree] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -182,8 +183,11 @@ export default function PricingTable() {
   }
 
   const formatPrice = (price: string) => {
-    // Price is in dollars per token, convert to dollars per 1K tokens
+    // Handle negative prices (return N/A)
     const pricePerToken = Number.parseFloat(price)
+    if (pricePerToken < 0) return "N/A"
+
+    // Price is in dollars per token, convert to dollars per 1K tokens
     const pricePerThousandTokens = pricePerToken * 1000
     return `$${pricePerThousandTokens.toFixed(pricePerThousandTokens < 0.001 ? 6 : pricePerThousandTokens < 0.01 ? 5 : 4)}`
   }
@@ -228,14 +232,14 @@ export default function PricingTable() {
   // Reset display limit when search query or filters change
   useEffect(() => {
     setDisplayLimit(MODELS_PER_PAGE)
-  }, [debouncedSearchQuery, activeFilters])
+  }, [debouncedSearchQuery, activeFilters, filterOutFree])
 
   // Toggle keep status for a model
   const toggleKeep = (id: string) => {
     setModelData((prev) => prev.map((model) => (model.id === id ? { ...model, keep: !model.keep } : model)))
   }
 
-  // Filter models based on search query and keep status
+  // Filter models based on search query, keep status, and free models filter
   const filteredModels = modelData.filter((model) => {
     // Always show models marked as "keep"
     if (model.keep) return true
@@ -249,7 +253,11 @@ export default function PricingTable() {
     // Check if model matches active provider filters
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
 
-    return matchesSearch && matchesProviderFilter
+    // Filter out free models if the checkbox is checked
+    const isFree = model.name.includes("(free)")
+    const matchesFreeFilter = !filterOutFree || !isFree
+
+    return matchesSearch && matchesProviderFilter && matchesFreeFilter
   })
 
   // Sort models based on sort configuration
@@ -310,6 +318,7 @@ export default function PricingTable() {
   const clearFilters = () => {
     setActiveFilters([])
     setSearchQuery("")
+    setFilterOutFree(false)
   }
 
   // Helper function to parse context window sizes
@@ -417,6 +426,16 @@ export default function PricingTable() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant={filterOutFree ? "default" : "outline"}
+            className="flex items-center gap-2"
+            onClick={() => setFilterOutFree(!filterOutFree)}
+            disabled={isLoading}
+          >
+            <Checkbox checked={filterOutFree} className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Hide Free</span>
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

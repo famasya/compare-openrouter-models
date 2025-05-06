@@ -1,15 +1,12 @@
 {
-  "name": "openrouter-models",
+  "name": "my-v0-project",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages",
-    "preview": "npm run pages:build && wrangler pages dev",
-    "deploy": "npm run pages:build && wrangler pages deploy"
+    "lint": "next lint"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -63,7 +60,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.12",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

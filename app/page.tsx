@@ -1,5 +1,21 @@
 import PricingTable from "@/components/pricing-table"
 import { Github } from "lucide-react"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "OpenRouter Model Price Comparison",
+  description: "Compare pricing across different AI models available on OpenRouter",
+  openGraph: {
+    title: "OpenRouter Model Price Comparison",
+    description: "Compare pricing across different AI models available on OpenRouter",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OpenRouter Model Price Comparison",
+    description: "Compare pricing across different AI models available on OpenRouter",
+  },
+}
 
 export default function Home() {
   return (
@@ -7,7 +23,9 @@ export default function Home() {
       <div className="w-full max-w-6xl space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-center sm:text-left md:text-3xl">AI Model Pricing Comparison</h1>
+            <h1 className="text-2xl font-bold text-center sm:text-left md:text-3xl">
+              OpenRouter Model Price Comparison
+            </h1>
             <p className="text-center sm:text-left text-muted-foreground">
               Compare pricing across different AI models available on OpenRouter
             </p>
