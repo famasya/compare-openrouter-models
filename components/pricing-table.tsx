@@ -1,34 +1,37 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Search,
-  SlidersHorizontal,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  X,
-  ExternalLink,
-  RefreshCw,
-  Plus,
-  Github,
-} from "lucide-react"
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { useMobile } from "@/hooks/use-mobile"
+import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useDebounce } from "@/hooks/use-debounce"
+import { useMobile } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  Filter,
+  Github,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react"
+import { useEffect, useState } from "react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip"
 
 // OpenRouter API response types
 interface OpenRouterModel {
@@ -244,11 +247,16 @@ export default function PricingTable() {
     // Always show models marked as "keep"
     if (model.keep) return true
 
+    // If there are multiple search terms, require all of them to match
+    const searchTerms = debouncedSearchQuery.split(" ")
+    const allTermsMatch = searchTerms.every((term) => model.name.toLowerCase().includes(term.toLowerCase()))
+
     const searchLower = debouncedSearchQuery.toLowerCase()
     const matchesSearch =
-      model.name.toLowerCase().includes(searchLower) ||
+      allTermsMatch ||
       model.provider.toLowerCase().includes(searchLower) ||
       model.features.some((feature) => feature.toLowerCase().includes(searchLower))
+
 
     // Check if model matches active provider filters
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
@@ -319,6 +327,10 @@ export default function PricingTable() {
     setActiveFilters([])
     setSearchQuery("")
     setFilterOutFree(false)
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
   }
 
   // Helper function to parse context window sizes
@@ -433,7 +445,7 @@ export default function PricingTable() {
             onClick={() => setFilterOutFree(!filterOutFree)}
             disabled={isLoading}
           >
-            <Checkbox checked={filterOutFree} className="h-4 w-4 mr-1" />
+            <input type="checkbox" checked={filterOutFree} onChange={() => setFilterOutFree(!filterOutFree)} className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Hide Free</span>
           </Button>
 
@@ -463,17 +475,6 @@ export default function PricingTable() {
               <X className="h-4 w-4" />
             </Button>
           )}
-
-          <a
-            href="https://github.com/famasya/v0-openrouter-models"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center"
-          >
-            <Button variant="outline" size="icon" title="View on GitHub">
-              <Github className="h-4 w-4" />
-            </Button>
-          </a>
         </div>
       </div>
 
@@ -658,7 +659,7 @@ export default function PricingTable() {
                     </TableRow>
                   ) : (
                     displayedModels.map((model) => (
-                      <TableRow key={model.id} className={`${model.keep ? "bg-primary/5 sticky top-0 z-10" : ""}`}>
+                      <TableRow key={model.id} className={cn("text-sm", model.keep ? "bg-primary/5 sticky top-0 z-10" : "")}>
                         {visibleColumns.includes("keep") && (
                           <TableCell className="w-[60px]">
                             <Checkbox
@@ -668,7 +669,21 @@ export default function PricingTable() {
                             />
                           </TableCell>
                         )}
-                        {visibleColumns.includes("name") && <TableCell>{renderModelName(model)}</TableCell>}
+                        {visibleColumns.includes("name") && <TableCell className="flex items-center gap-2">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Button variant={"outline"}
+                                  onClick={() => copyToClipboard(model.id)}
+                                  className="px-1 h-6 text-xs"><Copy className="w-2 h-2" /></Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Copy model ID
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <span>{renderModelName(model)}</span>
+                        </TableCell>}
                         {visibleColumns.includes("provider") && <TableCell>{model.provider}</TableCell>}
                         {visibleColumns.includes("contextWindow") && (
                           <TableCell className="font-mono">{model.contextWindow}</TableCell>
