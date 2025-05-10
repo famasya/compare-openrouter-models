@@ -1,5 +1,6 @@
 import PricingTable from "@/components/pricing-table"
-import { Github } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { ExternalLink, Github } from "lucide-react"
 
 export default function Home() {
   return (
@@ -14,15 +15,28 @@ export default function Home() {
               Compare pricing across different AI models available on OpenRouter
             </p>
           </div>
-          <a
-            href="https://github.com/famasya/v0-openrouter-models"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 sm:mt-0 inline-flex items-center gap-2 text-sm hover:text-primary hover:underline"
-          >
-            <Github className="h-4 w-4" />
-            <span>View on GitHub</span>
-          </a>
+          <div className="flex gap-2">
+            <a
+              href="https://github.com/famasya/v0-openrouter-models"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size={"sm"} className="bg-blue-600 hover:bg-blue-700">
+                <Github className="h-4 w-4" />
+                <span>View on GitHub</span>
+              </Button>
+            </a>
+            <a
+              href="https://structured-outputs-playground.pages.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size={"sm"} className="bg-blue-600 hover:bg-blue-700">
+                <ExternalLink className="h-4 w-4" />
+                Structured Outputs Playground
+              </Button>
+            </a>
+          </div>
         </div>
         <PricingTable />
       </div>
