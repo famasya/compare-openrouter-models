@@ -79,9 +79,12 @@ interface ModelData {
   contextWindow: string
   inputCost: string
   outputCost: string
+  imageCost: string
   features: string[]
   keep: boolean
   description: string
+  input_cache_read: string
+  input_cache_write: string
   modalities: string[]
 }
 
@@ -93,6 +96,10 @@ const columns = [
   { id: "contextWindow", label: "Context", always: false },
   { id: "inputCost", label: "Input Cost", always: true },
   { id: "outputCost", label: "Output Cost", always: true },
+  { id: "imageCost", label: "Image Cost", always: true },
+  { id: "modalities", label: "Modalities", always: false },
+  { id: "input_cache_read", label: "Cache Read Cost", always: false },
+  { id: "input_cache_write", label: "Cache Write Cost", always: false },
   { id: "features", label: "Features", always: false },
 ]
 
@@ -155,6 +162,9 @@ export default function PricingTable() {
           keep: false,
           description: model.description,
           modalities: model.architecture.input_modalities,
+          input_cache_read: model.pricing.input_cache_read ? formatPrice(model.pricing.input_cache_read) : "N/A",
+          input_cache_write: model.pricing.input_cache_write ? formatPrice(model.pricing.input_cache_write) : "N/A",
+          imageCost: model.pricing.image ? formatPrice(model.pricing.image) : "N/A",
         }
       })
 
@@ -255,6 +265,7 @@ export default function PricingTable() {
     const matchesSearch =
       allTermsMatch ||
       model.provider.toLowerCase().includes(searchLower) ||
+      model.modalities.some((modality) => modality.toLowerCase().includes(searchLower)) ||
       model.features.some((feature) => feature.toLowerCase().includes(searchLower))
 
 
@@ -404,7 +415,7 @@ export default function PricingTable() {
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search models..."
+            placeholder="Search by name, provider, modality or feature..."
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -521,12 +532,13 @@ export default function PricingTable() {
             <div className="grid grid-cols-1 gap-4">
               {Array.from({ length: 5 }).map((_, index) => (
                 <Card key={index} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="flex w-full items-start mb-2">
                     <Skeleton className="h-6 w-40" />
                     <Skeleton className="h-6 w-20" />
                   </div>
                   <Skeleton className="h-4 w-full mt-2" />
                   <Skeleton className="h-4 w-3/4 mt-2" />
+                  <Skeleton className="h-4 w-full mt-2" />
                 </Card>
               ))}
             </div>
@@ -583,19 +595,43 @@ export default function PricingTable() {
                         <p className="text-sm text-muted-foreground">{model.provider}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium font-mono">
-                        {visibleColumns.includes("inputCost") && <div>In: {model.inputCost}</div>}
-                        {visibleColumns.includes("outputCost") && <div>Out: {model.outputCost}</div>}
-                      </div>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm ml-6">
+                    {visibleColumns.includes("inputCost") && (
+                      <>
+                        <div className="text-muted-foreground">Input:</div>
+                        <div className="font-mono">{model.inputCost}</div>
+                      </>
+                    )}
+                    {visibleColumns.includes("outputCost") && (
+                      <>
+                        <div className="text-muted-foreground">Output:</div>
+                        <div className="font-mono">{model.outputCost}</div>
+                      </>
+                    )}
                     {visibleColumns.includes("contextWindow") && (
                       <>
                         <div className="text-muted-foreground">Context:</div>
                         <div className="font-mono">{model.contextWindow}</div>
+                      </>
+                    )}
+                    {visibleColumns.includes("imageCost") && (
+                      <>
+                        <div className="text-muted-foreground">Image:</div>
+                        <div className="font-mono">{model.imageCost}</div>
+                      </>
+                    )}
+                    {visibleColumns.includes("input_cache_read") && (
+                      <>
+                        <div className="text-muted-foreground">Cache Read:</div>
+                        <div className="font-mono">{model.input_cache_read}</div>
+                      </>
+                    )}
+                    {visibleColumns.includes("input_cache_write") && (
+                      <>
+                        <div className="text-muted-foreground">Cache Write:</div>
+                        <div className="font-mono">{model.input_cache_write}</div>
                       </>
                     )}
                   </div>
@@ -672,10 +708,10 @@ export default function PricingTable() {
                         {visibleColumns.includes("name") && <TableCell className="flex items-center gap-2">
                           <TooltipProvider>
                             <Tooltip>
-                              <TooltipTrigger>
+                              <TooltipTrigger asChild>
                                 <Button variant={"outline"}
                                   onClick={() => copyToClipboard(model.id)}
-                                  className="px-1 h-6 text-xs"><Copy className="w-2 h-2" /></Button>
+                                  className="px-1 h-2 text-xs"><Copy /></Button>
                               </TooltipTrigger>
                               <TooltipContent>
                                 Copy model ID
@@ -693,6 +729,18 @@ export default function PricingTable() {
                         )}
                         {visibleColumns.includes("outputCost") && (
                           <TableCell className="font-mono">{model.outputCost}</TableCell>
+                        )}
+                        {visibleColumns.includes("imageCost") && (
+                          <TableCell className="font-mono">{model.imageCost}</TableCell>
+                        )}
+                        {visibleColumns.includes("modalities") && (
+                          <TableCell className="font-mono">{model.modalities.join(", ")}</TableCell>
+                        )}
+                        {visibleColumns.includes("input_cache_read") && (
+                          <TableCell className="font-mono">{model.input_cache_read}</TableCell>
+                        )}
+                        {visibleColumns.includes("input_cache_write") && (
+                          <TableCell className="font-mono">{model.input_cache_write}</TableCell>
                         )}
                         {visibleColumns.includes("features") && (
                           <TableCell>
