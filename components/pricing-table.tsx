@@ -273,7 +273,7 @@ export default function PricingTable() {
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
 
     // Filter out free models if the checkbox is checked
-    const isFree = model.name.includes("(free)")
+    const isFree = model.name.includes("(free)") || Number.parseFloat(model.inputCost.replace("$", "")) === 0 || Number.parseFloat(model.outputCost.replace("$", "")) === 0
     const matchesFreeFilter = !filterOutFree || !isFree
 
     return matchesSearch && matchesProviderFilter && matchesFreeFilter
