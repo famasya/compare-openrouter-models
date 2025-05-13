@@ -200,9 +200,9 @@ export default function PricingTable() {
     const pricePerToken = Number.parseFloat(price)
     if (pricePerToken < 0) return "N/A"
 
-    // Price is in dollars per token, convert to dollars per 1K tokens
-    const pricePerThousandTokens = pricePerToken * 1000
-    return `$${pricePerThousandTokens.toFixed(pricePerThousandTokens < 0.001 ? 6 : pricePerThousandTokens < 0.01 ? 5 : 4)}`
+    // Price is in dollars per token, convert to dollars per 1M tokens
+    const pricePerMillionTokens = pricePerToken * 1_000_000
+    return `$${pricePerMillionTokens.toFixed(pricePerMillionTokens < 0.001 ? 3 : pricePerMillionTokens < 0.01 ? 2 : 1)}`
   }
 
   const extractFeatures = (model: OpenRouterModel) => {
@@ -779,7 +779,7 @@ export default function PricingTable() {
         <div className="flex items-center gap-1">
           {lastUpdated && <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>}
           <span className="hidden sm:inline">•</span>
-          <span className="hidden sm:inline">Token costs are per 1K tokens</span>
+          <span className="hidden sm:inline">Token costs are per 1M tokens</span>
           <span className="hidden sm:inline">•</span>
           <a
             href="https://github.com/famasya/v0-openrouter-models"
