@@ -14,24 +14,26 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useDebounce } from "@/hooks/use-debounce"
-import { useMobile } from "@/hooks/use-mobile"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import {
   ChevronDown,
   ChevronUp,
   Copy,
   ExternalLink,
+  Eye,
+  EyeOff,
   Filter,
   Github,
   Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
+  Sparkles,
   X,
+  Zap,
 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip"
 
 // OpenRouter API response types
 interface OpenRouterModel {
@@ -88,7 +90,7 @@ interface ModelData {
   modalities: string[]
 }
 
-// Column configuration - Removed rate limit column
+// Column configuration
 const columns = [
   { id: "keep", label: "Keep", always: true },
   { id: "name", label: "Model", always: true },
@@ -103,51 +105,62 @@ const columns = [
   { id: "features", label: "Features", always: false },
 ]
 
-// Number of models to load initially and with each "Load More" click
-const MODELS_PER_PAGE = 10
+const MODELS_PER_PAGE = 15
 
 export default function PricingTable() {
   const [modelData, setModelData] = useState<ModelData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const debouncedSearchQuery = useDebounce(searchQuery, 300) // 300ms debounce delay
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [visibleColumns, setVisibleColumns] = useState(columns.filter((col) => col.always).map((col) => col.id))
   const [sortConfig, setSortConfig] = useState<{
     key: string
     direction: "ascending" | "descending"
-  }>({ key: "inputCost", direction: "ascending" }) // Default sort by input cost
+  }>({ key: "inputCost", direction: "ascending" })
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [filterOutFree, setFilterOutFree] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [displayLimit, setDisplayLimit] = useState(MODELS_PER_PAGE)
+  const [showDescriptions, setShowDescriptions] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
-  const isMobile = useMobile()
+  // Custom debounce effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   // Fetch data from OpenRouter API
   const fetchModels = async () => {
     setIsLoading(true)
     setError(null)
-
     try {
       const response = await fetch("https://openrouter.ai/api/v1/models")
-
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
       }
-
       const data: OpenRouterResponse = await response.json()
 
-      // Transform API data to our model structure
       const transformedData: ModelData[] = data.data.map((model) => {
-        // Extract provider from model ID (e.g., "openai/gpt-4o" -> "OpenAI")
         const providerFromId = model.id.split("/")[0]
         const provider = capitalizeFirstLetter(providerFromId)
-
-        // Format context window size
         const contextWindow = formatContextSize(model.context_length)
-
-        // Extract features from model data
         const features = extractFeatures(model)
 
         return {
@@ -170,7 +183,6 @@ export default function PricingTable() {
 
       setModelData(transformedData)
       setLastUpdated(new Date())
-      // Reset display limit when fetching new data
       setDisplayLimit(MODELS_PER_PAGE)
     } catch (err) {
       console.error("Error fetching models:", err)
@@ -196,144 +208,108 @@ export default function PricingTable() {
   }
 
   const formatPrice = (price: string) => {
-    // Handle negative prices (return N/A)
     const pricePerToken = Number.parseFloat(price)
     if (pricePerToken < 0) return "N/A"
-
-    // Price is in dollars per token, convert to dollars per 1M tokens
     const pricePerMillionTokens = pricePerToken * 1_000_000
     return `$${pricePerMillionTokens.toFixed(pricePerMillionTokens < 0.001 ? 3 : pricePerMillionTokens < 0.01 ? 2 : 1)}`
   }
 
   const extractFeatures = (model: OpenRouterModel) => {
     const features: string[] = []
-
-    // Check for vision capability
     if (model.architecture.input_modalities.includes("image")) {
       features.push("Vision")
     }
-
-    // Check for function calling
     if (model.supported_parameters.includes("tools") || model.supported_parameters.includes("function_call")) {
       features.push("Function calling")
     }
-
-    // Check for long context
     if (model.context_length >= 100000) {
       features.push("Long context")
     }
-
-    // Add modality information
     if (model.architecture.modality === "multimodal") {
       features.push("Multimodal")
     }
-
     return features
   }
 
-  // Fetch models on component mount
   useEffect(() => {
     fetchModels()
   }, [])
 
-  // Update visible columns based on screen size when component mounts (client-side only)
   useEffect(() => {
-    // This only runs in the browser, after the component mounts
-    setVisibleColumns(columns.filter((col) => col.always || window.innerWidth >= 768).map((col) => col.id))
-  }, [])
+    setVisibleColumns(columns.filter((col) => col.always || !isMobile).map((col) => col.id))
+  }, [isMobile])
 
-  // Reset display limit when search query or filters change
   useEffect(() => {
     setDisplayLimit(MODELS_PER_PAGE)
   }, [debouncedSearchQuery, activeFilters, filterOutFree])
 
-  // Toggle keep status for a model
   const toggleKeep = (id: string) => {
     setModelData((prev) => prev.map((model) => (model.id === id ? { ...model, keep: !model.keep } : model)))
   }
 
-  // Filter models based on search query, keep status, and free models filter
   const filteredModels = modelData.filter((model) => {
-    // Always show models marked as "keep"
     if (model.keep) return true
 
-    // If there are multiple search terms, require all of them to match
     const searchTerms = debouncedSearchQuery.split(" ")
     const allTermsMatch = searchTerms.every((term) => model.name.toLowerCase().includes(term.toLowerCase()))
-
     const searchLower = debouncedSearchQuery.toLowerCase()
     const matchesSearch =
       allTermsMatch ||
       model.provider.toLowerCase().includes(searchLower) ||
       model.modalities.some((modality) => modality.toLowerCase().includes(searchLower)) ||
+      model.description.toLowerCase().includes(searchLower) ||
       model.features.some((feature) => feature.toLowerCase().includes(searchLower))
 
-
-    // Check if model matches active provider filters
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
-
-    // Filter out free models if the checkbox is checked
-    const isFree = model.name.includes("(free)") || Number.parseFloat(model.inputCost.replace("$", "")) === 0 || Number.parseFloat(model.outputCost.replace("$", "")) === 0
+    const isFree =
+      model.name.includes("(free)") ||
+      Number.parseFloat(model.inputCost.replace("$", "")) === 0 ||
+      Number.parseFloat(model.outputCost.replace("$", "")) === 0
     const matchesFreeFilter = !filterOutFree || !isFree
 
     return matchesSearch && matchesProviderFilter && matchesFreeFilter
   })
 
-  // Sort models based on sort configuration
   const sortedModels = [...filteredModels].sort((a, b) => {
-    // First, prioritize kept models
     if (a.keep && !b.keep) return -1
     if (!a.keep && b.keep) return 1
 
-    // If both are kept or both are not kept, sort by the configured sort
     if (sortConfig) {
       if (sortConfig.key === "keep") {
         return sortConfig.direction === "ascending" ? Number(a.keep) - Number(b.keep) : Number(b.keep) - Number(a.keep)
       }
-
       const aValue = a[sortConfig.key as keyof typeof a]
       const bValue = b[sortConfig.key as keyof typeof b]
-
       if (sortConfig.key === "inputCost" || sortConfig.key === "outputCost") {
-        // Remove $ and convert to number for price sorting
         const aNum = Number.parseFloat(String(aValue).replace("$", ""))
         const bNum = Number.parseFloat(String(bValue).replace("$", ""))
         return sortConfig.direction === "ascending" ? aNum - bNum : bNum - aNum
       }
-
       if (sortConfig.key === "contextWindow") {
-        // Convert context window sizes to numbers for sorting (e.g., "128K" -> 128000)
         const aSize = parseContextSize(String(aValue))
         const bSize = parseContextSize(String(bValue))
         return sortConfig.direction === "ascending" ? aSize - bSize : bSize - aSize
       }
-
       if (typeof aValue === "string" && typeof bValue === "string") {
         return sortConfig.direction === "ascending" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
       }
     }
-
     return 0
   })
 
-  // Get models to display with pagination
   const displayedModels = sortedModels.slice(0, displayLimit)
   const hasMoreModels = sortedModels.length > displayLimit
 
-  // Load more models
   const loadMoreModels = () => {
     setDisplayLimit((prev) => prev + MODELS_PER_PAGE)
   }
 
-  // Get unique providers for filtering
   const providers = Array.from(new Set(modelData.map((model) => model.provider)))
 
-  // Toggle provider filter
   const toggleProviderFilter = (provider: string) => {
     setActiveFilters((prev) => (prev.includes(provider) ? prev.filter((p) => p !== provider) : [...prev, provider]))
   }
 
-  // Clear all filters
   const clearFilters = () => {
     setActiveFilters([])
     setSearchQuery("")
@@ -344,25 +320,20 @@ export default function PricingTable() {
     navigator.clipboard.writeText(text)
   }
 
-  // Helper function to parse context window sizes
   function parseContextSize(sizeStr: string): number {
     const match = sizeStr.match(/(\d+)([KM])?/)
     if (!match) return 0
-
     const [, num, unit] = match
     const baseNum = Number.parseInt(num, 10)
-
     if (unit === "K") return baseNum * 1000
     if (unit === "M") return baseNum * 1000000
     return baseNum
   }
 
-  // Toggle column visibility
   const toggleColumn = (columnId: string) => {
     setVisibleColumns((prev) => (prev.includes(columnId) ? prev.filter((id) => id !== columnId) : [...prev, columnId]))
   }
 
-  // Handle sorting
   const requestSort = (key: string) => {
     let direction: "ascending" | "descending" = "ascending"
     if (sortConfig && sortConfig.key === key && sortConfig.direction === "ascending") {
@@ -371,425 +342,477 @@ export default function PricingTable() {
     setSortConfig({ key, direction })
   }
 
-  // Render sort indicator
   const renderSortIndicator = (columnId: string) => {
     if (sortConfig?.key !== columnId) return null
     return sortConfig.direction === "ascending" ? (
-      <ChevronUp className="ml-1 h-4 w-4 inline" />
+      <ChevronUp className="ml-1 h-3 w-3 inline" />
     ) : (
-      <ChevronDown className="ml-1 h-4 w-4 inline" />
+      <ChevronDown className="ml-1 h-3 w-3 inline" />
     )
   }
 
-  // Render model name with link - Updated for consistent icon positioning
   const renderModelName = (model: ModelData, isCard = false) => {
     return (
-      <div className={`flex items-center gap-1 ${isCard ? "font-medium text-base" : "font-medium"}`}>
-        <a
-          href={model.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono hover:text-primary hover:underline inline-flex items-center"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {model.name}
-        </a>
-        <ExternalLink className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
+      <div className="space-y-1">
+        <div className={`flex items-center gap-2 ${isCard ? "font-semibold text-sm" : "font-medium text-sm"}`}>
+          <a
+            href={model.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono hover:text-blue-600 hover:underline inline-flex items-center transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {model.name}
+          </a>
+          <ExternalLink className="w-3 h-3 flex-shrink-0 text-muted-foreground opacity-60" />
+        </div>
+        {showDescriptions && <p className="text-xs text-muted-foreground leading-relaxed">{model.description}</p>}
       </div>
     )
-  }
-
-  // Render loading skeletons
-  const renderSkeletons = () => {
-    return Array.from({ length: 10 }).map((_, index) => (
-      <div key={index} className="space-y-2">
-        <Skeleton className="h-6 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-      </div>
-    ))
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3 justify-between">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, provider, modality or feature..."
-            className="pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            disabled={isLoading}
-          />
+    <div className="space-y-6 p-1">
+      {/* Compact Controls */}
+      <div className="bg-white dark:bg-gray-950 rounded-lg border shadow-sm p-4 space-y-4">
+        {/* Search and Main Controls */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search models, providers, features..."
+              className="pl-10 h-9 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchModels}
+              disabled={isLoading}
+              className="h-9 bg-transparent"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isLoading} className="h-9 bg-transparent">
+                  <Filter className="h-4 w-4 mr-1" />
+                  Providers
+                  {activeFilters.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-4 px-1 text-xs">
+                      {activeFilters.length}
+                    </Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                {providers.map((provider) => (
+                  <DropdownMenuCheckboxItem
+                    key={provider}
+                    checked={activeFilters.includes(provider)}
+                    onCheckedChange={() => toggleProviderFilter(provider)}
+                  >
+                    {provider}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isLoading} className="h-9 bg-transparent">
+                  <SlidersHorizontal className="h-4 w-4 mr-1" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {columns.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={visibleColumns.includes(column.id)}
+                    onCheckedChange={() => toggleColumn(column.id)}
+                    disabled={column.always}
+                  >
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={fetchModels} disabled={isLoading} title="Refresh data">
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2" disabled={isLoading}>
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  Providers {activeFilters.length > 0 && `(${activeFilters.length})`}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-white overflow-y-scroll h-96">
-              {providers.map((provider) => (
-                <DropdownMenuCheckboxItem
-                  key={provider}
-                  checked={activeFilters.includes(provider)}
-                  onCheckedChange={() => toggleProviderFilter(provider)}
-                >
-                  {provider}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
+        {/* Filter Toggles */}
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={filterOutFree ? "default" : "outline"}
-            className="flex items-center gap-2"
+            size="sm"
             onClick={() => setFilterOutFree(!filterOutFree)}
             disabled={isLoading}
+            className="h-8 text-xs"
           >
-            <input type="checkbox" checked={filterOutFree} onChange={() => setFilterOutFree(!filterOutFree)} className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Hide Free</span>
+            <Zap className="h-3 w-3 mr-1" />
+            Hide Free
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2" disabled={isLoading}>
-                <SlidersHorizontal className="h-4 w-4" />
-                <span className="hidden sm:inline">Columns</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {columns.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  checked={visibleColumns.includes(column.id)}
-                  onCheckedChange={() => toggleColumn(column.id)}
-                  disabled={column.always}
-                >
-                  {column.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant={showDescriptions ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowDescriptions(!showDescriptions)}
+            disabled={isLoading}
+            className="h-8 text-xs"
+          >
+            {showDescriptions ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+            Descriptions
+          </Button>
 
-          {(activeFilters.length > 0 || searchQuery) && (
-            <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters" disabled={isLoading}>
-              <X className="h-4 w-4" />
+          {/* Quick Sort Buttons */}
+          <div className="flex gap-1 ml-auto">
+            <Button
+              variant={sortConfig.key === "inputCost" ? "default" : "outline"}
+              size="sm"
+              onClick={() => requestSort("inputCost")}
+              className="h-8 text-xs"
+              disabled={isLoading}
+            >
+              Input Cost {sortConfig.key === "inputCost" && renderSortIndicator("inputCost")}
+            </Button>
+            <Button
+              variant={sortConfig.key === "outputCost" ? "default" : "outline"}
+              size="sm"
+              onClick={() => requestSort("outputCost")}
+              className="h-8 text-xs"
+              disabled={isLoading}
+            >
+              Output Cost {sortConfig.key === "outputCost" && renderSortIndicator("outputCost")}
+            </Button>
+            <Button
+              variant={sortConfig.key === "imageCost" ? "default" : "outline"}
+              size="sm"
+              onClick={() => requestSort("imageCost")}
+              className="h-8 text-xs"
+              disabled={isLoading}
+            >
+              Image Cost {sortConfig.key === "imageCost" && renderSortIndicator("imageCost")}
+            </Button>
+          </div>
+
+          {(activeFilters.length > 0 || searchQuery || filterOutFree) && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
+              <X className="h-3 w-3 mr-1" />
+              Clear
             </Button>
           )}
         </div>
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+        <Alert variant="destructive" className="border-red-200 bg-red-50 dark:bg-red-950/20">
+          <AlertDescription className="text-sm">{error}</AlertDescription>
         </Alert>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-2">
-        <Button
-          variant={sortConfig.key === "inputCost" ? "default" : "outline"}
-          size="sm"
-          onClick={() => requestSort("inputCost")}
-          className="text-xs"
-          disabled={isLoading}
-        >
-          Sort by Input Cost {sortConfig.key === "inputCost" && renderSortIndicator("inputCost")}
-        </Button>
-        <Button
-          variant={sortConfig.key === "outputCost" ? "default" : "outline"}
-          size="sm"
-          onClick={() => requestSort("outputCost")}
-          className="text-xs"
-          disabled={isLoading}
-        >
-          Sort by Output Cost {sortConfig.key === "outputCost" && renderSortIndicator("outputCost")}
-        </Button>
-        <Button
-          variant={sortConfig.key === "contextWindow" ? "default" : "outline"}
-          size="sm"
-          onClick={() => requestSort("contextWindow")}
-          className="text-xs"
-          disabled={isLoading}
-        >
-          Sort by Context Size {sortConfig.key === "contextWindow" && renderSortIndicator("contextWindow")}
-        </Button>
-      </div>
-
+      {/* Content */}
       {isLoading ? (
-        // Loading state
-        <div className="space-y-4">
+        <div className="space-y-3">
           {isMobile ? (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid gap-3">
               {Array.from({ length: 5 }).map((_, index) => (
                 <Card key={index} className="p-4">
-                  <div className="flex w-full items-start mb-2">
-                    <Skeleton className="h-6 w-40" />
-                    <Skeleton className="h-6 w-20" />
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <Skeleton className="h-3 w-20" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
                   </div>
-                  <Skeleton className="h-4 w-full mt-2" />
-                  <Skeleton className="h-4 w-3/4 mt-2" />
-                  <Skeleton className="h-4 w-full mt-2" />
                 </Card>
               ))}
             </div>
           ) : (
-            <div className="rounded-md border overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {columns.map(
-                        (column) =>
-                          visibleColumns.includes(column.id) && (
-                            <TableHead key={column.id}>
-                              <div className="flex items-center">{column.label}</div>
-                            </TableHead>
-                          ),
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Array.from({ length: 10 }).map((_, index) => (
-                      <TableRow key={index}>
-                        {visibleColumns.map((column) => (
-                          <TableCell key={column}>
-                            <Skeleton className="h-4 w-full" />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : isMobile ? (
-        // Mobile card view
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {displayedModels.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No models found matching your search</div>
-            ) : (
-              displayedModels.map((model) => (
-                <Card key={model.id} className={`p-4 ${model.keep ? "border-primary bg-primary/5" : ""}`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id={`keep-mobile-${model.id}`}
-                        checked={model.keep}
-                        onCheckedChange={() => toggleKeep(model.id)}
-                      />
-                      <div>
-                        {renderModelName(model, true)}
-                        <p className="text-sm text-muted-foreground">{model.provider}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-sm ml-6">
-                    {visibleColumns.includes("inputCost") && (
-                      <>
-                        <div className="text-muted-foreground">Input:</div>
-                        <div className="font-mono">{model.inputCost}</div>
-                      </>
-                    )}
-                    {visibleColumns.includes("outputCost") && (
-                      <>
-                        <div className="text-muted-foreground">Output:</div>
-                        <div className="font-mono">{model.outputCost}</div>
-                      </>
-                    )}
-                    {visibleColumns.includes("contextWindow") && (
-                      <>
-                        <div className="text-muted-foreground">Context:</div>
-                        <div className="font-mono">{model.contextWindow}</div>
-                      </>
-                    )}
-                    {visibleColumns.includes("imageCost") && (
-                      <>
-                        <div className="text-muted-foreground">Image:</div>
-                        <div className="font-mono">{model.imageCost}</div>
-                      </>
-                    )}
-                    {visibleColumns.includes("input_cache_read") && (
-                      <>
-                        <div className="text-muted-foreground">Cache Read:</div>
-                        <div className="font-mono">{model.input_cache_read}</div>
-                      </>
-                    )}
-                    {visibleColumns.includes("input_cache_write") && (
-                      <>
-                        <div className="text-muted-foreground">Cache Write:</div>
-                        <div className="font-mono">{model.input_cache_write}</div>
-                      </>
-                    )}
-                  </div>
-
-                  {visibleColumns.includes("features") && model.features.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1 ml-6">
-                      {model.features.map((feature, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="text-xs text-muted-foreground mt-2 ml-6 line-clamp-2">{model.description}</p>
-                </Card>
-              ))
-            )}
-          </div>
-
-          {hasMoreModels && (
-            <div className="flex justify-center mt-4">
-              <Button variant="outline" onClick={loadMoreModels} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Load More Models
-              </Button>
-            </div>
-          )}
-        </div>
-      ) : (
-        // Desktop table view
-        <div className="space-y-4">
-          <div className="rounded-md border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="rounded-lg border overflow-hidden bg-white dark:bg-gray-950">
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="bg-gray-50 dark:bg-gray-900">
                     {columns.map(
                       (column) =>
                         visibleColumns.includes(column.id) && (
-                          <TableHead
-                            key={column.id}
-                            className={`cursor-pointer hover:bg-muted/50 ${column.id === "keep" ? "w-[60px]" : ""}`}
-                            onClick={() => requestSort(column.id)}
-                          >
-                            <div className="flex items-center">
-                              {column.label}
-                              {renderSortIndicator(column.id)}
-                            </div>
+                          <TableHead key={column.id} className="h-10 text-xs font-medium">
+                            {column.label}
                           </TableHead>
                         ),
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedModels.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={visibleColumns.length} className="text-center py-6">
-                        No models found matching your search
-                      </TableCell>
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <TableRow key={index}>
+                      {visibleColumns.map((column) => (
+                        <TableCell key={column} className="h-12">
+                          <Skeleton className="h-3 w-full" />
+                        </TableCell>
+                      ))}
                     </TableRow>
-                  ) : (
-                    displayedModels.map((model) => (
-                      <TableRow key={model.id} className={cn("text-sm", model.keep ? "bg-primary/5 sticky top-0 z-10" : "")}>
-                        {visibleColumns.includes("keep") && (
-                          <TableCell className="w-[60px]">
-                            <Checkbox
-                              id={`keep-${model.id}`}
-                              checked={model.keep}
-                              onCheckedChange={() => toggleKeep(model.id)}
-                            />
-                          </TableCell>
-                        )}
-                        {visibleColumns.includes("name") && <TableCell className="flex items-center gap-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant={"outline"}
-                                  onClick={() => copyToClipboard(model.id)}
-                                  className="px-1 h-2 text-xs"><Copy /></Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Copy model ID
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <span>{renderModelName(model)}</span>
-                        </TableCell>}
-                        {visibleColumns.includes("provider") && <TableCell>{model.provider}</TableCell>}
-                        {visibleColumns.includes("contextWindow") && (
-                          <TableCell className="font-mono">{model.contextWindow}</TableCell>
-                        )}
-                        {visibleColumns.includes("inputCost") && (
-                          <TableCell className="font-mono">{model.inputCost}</TableCell>
-                        )}
-                        {visibleColumns.includes("outputCost") && (
-                          <TableCell className="font-mono">{model.outputCost}</TableCell>
-                        )}
-                        {visibleColumns.includes("imageCost") && (
-                          <TableCell className="font-mono">{model.imageCost}</TableCell>
-                        )}
-                        {visibleColumns.includes("modalities") && (
-                          <TableCell className="font-mono">{model.modalities.join(", ")}</TableCell>
-                        )}
-                        {visibleColumns.includes("input_cache_read") && (
-                          <TableCell className="font-mono">{model.input_cache_read}</TableCell>
-                        )}
-                        {visibleColumns.includes("input_cache_write") && (
-                          <TableCell className="font-mono">{model.input_cache_write}</TableCell>
-                        )}
-                        {visibleColumns.includes("features") && (
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {model.features.map((feature, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">
-                                  {feature}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </div>
-          </div>
+          )}
+        </div>
+      ) : isMobile ? (
+        <div className="space-y-3">
+          {displayedModels.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No models found matching your criteria</p>
+            </div>
+          ) : (
+            displayedModels.map((model) => (
+              <Card
+                key={model.id}
+                className={cn(
+                  "p-4 transition-all hover:shadow-md",
+                  model.keep ? "border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 shadow-sm" : "",
+                )}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id={`keep-mobile-${model.id}`}
+                      checked={model.keep}
+                      onCheckedChange={() => toggleKeep(model.id)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      {renderModelName(model, true)}
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs h-5">
+                          {model.provider}
+                        </Badge>
+                        {model.features.slice(0, 2).map((feature, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs h-5">
+                            {feature}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm pl-7">
+                    {visibleColumns.includes("inputCost") && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground text-xs">Input:</span>
+                        <span className="font-mono text-xs">{model.inputCost}</span>
+                      </div>
+                    )}
+                    {visibleColumns.includes("outputCost") && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground text-xs">Output:</span>
+                        <span className="font-mono text-xs">{model.outputCost}</span>
+                      </div>
+                    )}
+                    {visibleColumns.includes("contextWindow") && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground text-xs">Context:</span>
+                        <span className="font-mono text-xs">{model.contextWindow}</span>
+                      </div>
+                    )}
+                    {visibleColumns.includes("imageCost") && model.imageCost !== "N/A" && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground text-xs">Image:</span>
+                        <span className="font-mono text-xs">{model.imageCost}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
 
           {hasMoreModels && (
-            <div className="flex justify-center mt-4">
-              <Button variant="outline" onClick={loadMoreModels} className="flex items-center gap-2">
+            <div className="flex justify-center pt-4">
+              <Button variant="outline" onClick={loadMoreModels} className="gap-2 bg-transparent">
                 <Plus className="h-4 w-4" />
-                Load More Models
+                Load {Math.min(MODELS_PER_PAGE, sortedModels.length - displayLimit)} More
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border overflow-hidden bg-white dark:bg-gray-950 shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b">
+                {columns.map(
+                  (column) =>
+                    visibleColumns.includes(column.id) && (
+                      <TableHead
+                        key={column.id}
+                        className={cn(
+                          "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors h-11 text-xs font-semibold",
+                          column.id === "keep" ? "w-12" : "",
+                        )}
+                        onClick={() => requestSort(column.id)}
+                      >
+                        <div className="flex items-center gap-1">
+                          {column.label}
+                          {renderSortIndicator(column.id)}
+                        </div>
+                      </TableHead>
+                    ),
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayedModels.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length} className="text-center py-12">
+                    <div className="text-muted-foreground">
+                      <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No models found matching your criteria</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                displayedModels.map((model, index) => (
+                  <TableRow
+                    key={model.id}
+                    className={cn(
+                      "text-sm hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors",
+                      model.keep ? "bg-blue-50/50 dark:bg-blue-950/20 border-l-2 border-l-blue-400" : "",
+                      index % 2 === 0 ? "bg-gray-50/30 dark:bg-gray-900/20" : "",
+                    )}
+                  >
+                    {visibleColumns.includes("keep") && (
+                      <TableCell className="w-12">
+                        <Checkbox
+                          id={`keep-${model.id}`}
+                          checked={model.keep}
+                          onCheckedChange={() => toggleKeep(model.id)}
+                        />
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes("name") && (
+                      <TableCell className="max-w-xs">
+                        <div className="flex items-center gap-2">
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(model.id)}
+                                  className="h-6 w-6 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copy model ID</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          {renderModelName(model)}
+                        </div>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes("provider") && (
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {model.provider}
+                        </Badge>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes("contextWindow") && (
+                      <TableCell className="font-mono text-xs">{model.contextWindow}</TableCell>
+                    )}
+                    {visibleColumns.includes("inputCost") && (
+                      <TableCell className="font-mono text-xs font-medium">{model.inputCost}</TableCell>
+                    )}
+                    {visibleColumns.includes("outputCost") && (
+                      <TableCell className="font-mono text-xs font-medium">{model.outputCost}</TableCell>
+                    )}
+                    {visibleColumns.includes("imageCost") && (
+                      <TableCell className="font-mono text-xs">{model.imageCost}</TableCell>
+                    )}
+                    {visibleColumns.includes("modalities") && (
+                      <TableCell className="text-xs">{model.modalities.join(", ")}</TableCell>
+                    )}
+                    {visibleColumns.includes("input_cache_read") && (
+                      <TableCell className="font-mono text-xs">{model.input_cache_read}</TableCell>
+                    )}
+                    {visibleColumns.includes("input_cache_write") && (
+                      <TableCell className="font-mono text-xs">{model.input_cache_write}</TableCell>
+                    )}
+                    {visibleColumns.includes("features") && (
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {model.features.slice(0, 3).map((feature, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-xs h-5">
+                              {feature}
+                            </Badge>
+                          ))}
+                          {model.features.length > 3 && (
+                            <Badge variant="outline" className="text-xs h-5">
+                              +{model.features.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {hasMoreModels && (
+            <div className="border-t bg-gray-50 dark:bg-gray-900 p-4 text-center">
+              <Button variant="outline" onClick={loadMoreModels} className="gap-2 bg-transparent">
+                <Plus className="h-4 w-4" />
+                Load {Math.min(MODELS_PER_PAGE, sortedModels.length - displayLimit)} More Models
               </Button>
             </div>
           )}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground gap-2">
-        <div>
-          Showing {displayedModels.length} of {sortedModels.length} models
+      {/* Footer */}
+      <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground gap-3 pt-4 border-t">
+        <div className="flex items-center gap-4">
+          <span>
+            Showing {displayedModels.length} of {sortedModels.length} models
+          </span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline">Costs per 1M tokens</span>
         </div>
-        <div className="flex items-center gap-1">
-          {lastUpdated && <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>}
-          <span className="hidden sm:inline">•</span>
-          <span className="hidden sm:inline">Token costs are per 1M tokens</span>
-          <span className="hidden sm:inline">•</span>
+        <div className="flex items-center gap-3">
           <a
             href="https://github.com/famasya/v0-openrouter-models"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+            className="inline-flex items-center gap-1 hover:text-primary transition-colors"
           >
             <Github className="h-3 w-3" />
             <span>GitHub</span>
           </a>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <Sparkles className="h-3 w-3" />
+            OpenRouter API
+          </span>
+          {lastUpdated && (
+            <span className="bg-white/60 dark:bg-black/20 px-2 py-1 rounded-md">
+              Updated: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
         </div>
       </div>
     </div>

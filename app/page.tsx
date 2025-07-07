@@ -6,14 +6,16 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center p-4 md:p-8">
       <div className="w-full space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-center sm:text-left md:text-3xl">
-              OpenRouter Model Price Comparison
-            </h1>
-            <p className="text-center sm:text-left text-muted-foreground">
-              Compare pricing across different AI models available on OpenRouter
-            </p>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-xl p-6 border border-blue-100 dark:border-blue-900/20 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                OpenRouter Model Price Comparison
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Compare pricing across different AI models available on OpenRouter
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
             <a
