@@ -17,7 +17,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col md:flex-row gap-2">
             <a
               href="https://github.com/famasya/v0-openrouter-models"
               target="_blank"

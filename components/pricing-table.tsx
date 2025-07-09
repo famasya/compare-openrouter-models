@@ -366,7 +366,7 @@ export default function PricingTable() {
           </a>
           <ExternalLink className="w-3 h-3 flex-shrink-0 text-muted-foreground opacity-60" />
         </div>
-        {showDescriptions && <p className="text-xs text-muted-foreground leading-relaxed">{model.description}</p>}
+        {showDescriptions && <p className="text-xs text-muted-foreground leading-relaxed mb-2">{model.description}</p>}
       </div>
     )
   }
@@ -448,58 +448,61 @@ export default function PricingTable() {
         </div>
 
         {/* Filter Toggles */}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant={filterOutFree ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterOutFree(!filterOutFree)}
-            disabled={isLoading}
-            className="h-8 text-xs"
-          >
-            <Zap className="h-3 w-3 mr-1" />
-            Hide Free
-          </Button>
+        <div className="flex flex-col md:flex-row gap-2">
+          <div className="flex gap-2">
+            <Button
+              variant={filterOutFree ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterOutFree(!filterOutFree)}
+              disabled={isLoading}
+              className="h-8 text-xs"
+            >
+              <Zap className="h-3 w-3 mr-1" />
+              Hide Free
+            </Button>
+            <Button
+              variant={showDescriptions ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowDescriptions(!showDescriptions)}
+              disabled={isLoading}
+              className="h-8 text-xs"
+            >
+              {showDescriptions ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+              Descriptions
+            </Button>
+          </div>
 
-          <Button
-            variant={showDescriptions ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowDescriptions(!showDescriptions)}
-            disabled={isLoading}
-            className="h-8 text-xs"
-          >
-            {showDescriptions ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-            Descriptions
-          </Button>
-
-          {/* Quick Sort Buttons */}
-          <div className="flex gap-1 ml-auto">
-            <Button
-              variant={sortConfig.key === "inputCost" ? "default" : "outline"}
-              size="sm"
-              onClick={() => requestSort("inputCost")}
-              className="h-8 text-xs"
-              disabled={isLoading}
-            >
-              Input Cost {sortConfig.key === "inputCost" && renderSortIndicator("inputCost")}
-            </Button>
-            <Button
-              variant={sortConfig.key === "outputCost" ? "default" : "outline"}
-              size="sm"
-              onClick={() => requestSort("outputCost")}
-              className="h-8 text-xs"
-              disabled={isLoading}
-            >
-              Output Cost {sortConfig.key === "outputCost" && renderSortIndicator("outputCost")}
-            </Button>
-            <Button
-              variant={sortConfig.key === "imageCost" ? "default" : "outline"}
-              size="sm"
-              onClick={() => requestSort("imageCost")}
-              className="h-8 text-xs"
-              disabled={isLoading}
-            >
-              Image Cost {sortConfig.key === "imageCost" && renderSortIndicator("imageCost")}
-            </Button>
+          <div>
+            {/* Quick Sort Buttons */}
+            <div className="flex gap-1 ml-auto">
+              <Button
+                variant={sortConfig.key === "inputCost" ? "default" : "outline"}
+                size="sm"
+                onClick={() => requestSort("inputCost")}
+                className="h-8 text-xs"
+                disabled={isLoading}
+              >
+                Input Cost {sortConfig.key === "inputCost" && renderSortIndicator("inputCost")}
+              </Button>
+              <Button
+                variant={sortConfig.key === "outputCost" ? "default" : "outline"}
+                size="sm"
+                onClick={() => requestSort("outputCost")}
+                className="h-8 text-xs"
+                disabled={isLoading}
+              >
+                Output Cost {sortConfig.key === "outputCost" && renderSortIndicator("outputCost")}
+              </Button>
+              <Button
+                variant={sortConfig.key === "imageCost" ? "default" : "outline"}
+                size="sm"
+                onClick={() => requestSort("imageCost")}
+                className="h-8 text-xs"
+                disabled={isLoading}
+              >
+                Image Cost {sortConfig.key === "imageCost" && renderSortIndicator("imageCost")}
+              </Button>
+            </div>
           </div>
 
           {(activeFilters.length > 0 || searchQuery || filterOutFree) && (
