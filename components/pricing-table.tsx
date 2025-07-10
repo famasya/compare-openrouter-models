@@ -1,5 +1,6 @@
 "use client"
 
+import { ModelData } from "@/app/fetcher"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -26,101 +26,45 @@ import {
   Filter,
   Github,
   Plus,
-  RefreshCw,
   Search,
-  SlidersHorizontal,
   Sparkles,
-  X,
-  Zap,
+  Zap
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
-// OpenRouter API response types
-interface OpenRouterModel {
-  id: string
-  name: string
-  created: number
-  description: string
-  context_length: number
-  architecture: {
-    modality: string
-    input_modalities: string[]
-    output_modalities: string[]
-    tokenizer: string
-    instruct_type?: string
-  }
-  pricing: {
-    prompt: string
-    completion: string
-    request?: string
-    image?: string
-    web_search?: string
-    internal_reasoning?: string
-    input_cache_read?: string
-    input_cache_write?: string
-  }
-  top_provider: {
-    context_length?: number
-    max_completion_tokens?: number
-    is_moderated: boolean
-  }
-  per_request_limits: any
-  supported_parameters: string[]
-}
-
-interface OpenRouterResponse {
-  data: OpenRouterModel[]
-}
-
-// Our model data structure
-interface ModelData {
-  id: string
-  name: string
-  url: string
-  provider: string
-  contextWindow: string
-  inputCost: string
-  outputCost: string
-  imageCost: string
-  features: string[]
-  keep: boolean
-  description: string
-  input_cache_read: string
-  input_cache_write: string
-  modalities: string[]
-}
-
 // Column configuration
 const columns = [
-  { id: "keep", label: "Keep", always: true },
-  { id: "name", label: "Model", always: true },
-  { id: "provider", label: "Provider", always: true },
-  { id: "contextWindow", label: "Context", always: false },
-  { id: "inputCost", label: "Input Cost", always: true },
-  { id: "outputCost", label: "Output Cost", always: true },
-  { id: "imageCost", label: "Image Cost", always: true },
-  { id: "modalities", label: "Modalities", always: false },
-  { id: "input_cache_read", label: "Cache Read Cost", always: false },
-  { id: "input_cache_write", label: "Cache Write Cost", always: false },
-  { id: "features", label: "Features", always: false },
+  { id: "keep", label: "Keep" },
+  { id: "name", label: "Model" },
+  { id: "provider", label: "Provider" },
+  { id: "contextWindow", label: "Context" },
+  { id: "inputCost", label: "Input Cost" },
+  { id: "outputCost", label: "Output Cost" },
+  { id: "imageCost", label: "Image Cost" },
+  { id: "modalities", label: "Modalities" },
+  { id: "input_cache_read", label: "Cache Read Cost" },
+  { id: "input_cache_write", label: "Cache Write Cost" },
+  { id: "features", label: "Features" },
 ]
 
 const MODELS_PER_PAGE = 15
 
-export default function PricingTable() {
-  const [modelData, setModelData] = useState<ModelData[]>([])
+type Props = {
+  data: ModelData[];
+  lastUpdated: Date;
+}
+export default function PricingTable({ data, lastUpdated }: Props) {
+  const [modelData, setModelData] = useState<ModelData[]>(data)
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-  const [visibleColumns, setVisibleColumns] = useState(columns.filter((col) => col.always).map((col) => col.id))
+  const [visibleColumns, setVisibleColumns] = useState(columns.map((col) => col.id))
   const [sortConfig, setSortConfig] = useState<{
     key: string
     direction: "ascending" | "descending"
   }>({ key: "inputCost", direction: "ascending" })
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [filterOutFree, setFilterOutFree] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [displayLimit, setDisplayLimit] = useState(MODELS_PER_PAGE)
   const [showDescriptions, setShowDescriptions] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -146,97 +90,8 @@ export default function PricingTable() {
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  // Fetch data from OpenRouter API
-  const fetchModels = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch("https://openrouter.ai/api/v1/models")
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
-      }
-      const data: OpenRouterResponse = await response.json()
-
-      const transformedData: ModelData[] = data.data.map((model) => {
-        const providerFromId = model.id.split("/")[0]
-        const provider = capitalizeFirstLetter(providerFromId)
-        const contextWindow = formatContextSize(model.context_length)
-        const features = extractFeatures(model)
-
-        return {
-          id: model.id,
-          name: model.name,
-          url: `https://openrouter.ai/models/${model.id}`,
-          provider,
-          contextWindow,
-          inputCost: formatPrice(model.pricing.prompt),
-          outputCost: formatPrice(model.pricing.completion),
-          features,
-          keep: false,
-          description: model.description,
-          modalities: model.architecture.input_modalities,
-          input_cache_read: model.pricing.input_cache_read ? formatPrice(model.pricing.input_cache_read) : "N/A",
-          input_cache_write: model.pricing.input_cache_write ? formatPrice(model.pricing.input_cache_write) : "N/A",
-          imageCost: model.pricing.image ? formatPrice(model.pricing.image) : "N/A",
-        }
-      })
-
-      setModelData(transformedData)
-      setLastUpdated(new Date())
-      setDisplayLimit(MODELS_PER_PAGE)
-    } catch (err) {
-      console.error("Error fetching models:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch models")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Helper functions
-  const capitalizeFirstLetter = (string: string) => {
-    return string.charAt(0).toUpperCase() + string.slice(1)
-  }
-
-  const formatContextSize = (size: number) => {
-    if (size >= 1000000) {
-      return `${size / 1000000}M`
-    } else if (size >= 1000) {
-      return `${size / 1000}K`
-    } else {
-      return size.toString()
-    }
-  }
-
-  const formatPrice = (price: string) => {
-    const pricePerToken = Number.parseFloat(price)
-    if (pricePerToken < 0) return "N/A"
-    const pricePerMillionTokens = pricePerToken * 1_000_000
-    return `$${pricePerMillionTokens.toFixed(pricePerMillionTokens < 0.001 ? 3 : pricePerMillionTokens < 0.01 ? 2 : 1)}`
-  }
-
-  const extractFeatures = (model: OpenRouterModel) => {
-    const features: string[] = []
-    if (model.architecture.input_modalities.includes("image")) {
-      features.push("Vision")
-    }
-    if (model.supported_parameters.includes("tools") || model.supported_parameters.includes("function_call")) {
-      features.push("Function calling")
-    }
-    if (model.context_length >= 100000) {
-      features.push("Long context")
-    }
-    if (model.architecture.modality === "multimodal") {
-      features.push("Multimodal")
-    }
-    return features
-  }
-
   useEffect(() => {
-    fetchModels()
-  }, [])
-
-  useEffect(() => {
-    setVisibleColumns(columns.filter((col) => col.always || !isMobile).map((col) => col.id))
+    setVisibleColumns(columns.map((col) => col.id))
   }, [isMobile])
 
   useEffect(() => {
@@ -257,7 +112,6 @@ export default function PricingTable() {
       allTermsMatch ||
       model.provider.toLowerCase().includes(searchLower) ||
       model.modalities.some((modality) => modality.toLowerCase().includes(searchLower)) ||
-      model.description.toLowerCase().includes(searchLower) ||
       model.features.some((feature) => feature.toLowerCase().includes(searchLower))
 
     const matchesProviderFilter = activeFilters.length === 0 || activeFilters.includes(model.provider)
@@ -330,10 +184,6 @@ export default function PricingTable() {
     return baseNum
   }
 
-  const toggleColumn = (columnId: string) => {
-    setVisibleColumns((prev) => (prev.includes(columnId) ? prev.filter((id) => id !== columnId) : [...prev, columnId]))
-  }
-
   const requestSort = (key: string) => {
     let direction: "ascending" | "descending" = "ascending"
     if (sortConfig && sortConfig.key === key && sortConfig.direction === "ascending") {
@@ -384,24 +234,13 @@ export default function PricingTable() {
               className="pl-10 h-9 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              disabled={isLoading}
             />
           </div>
 
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchModels}
-              disabled={isLoading}
-              className="h-9 bg-transparent"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isLoading} className="h-9 bg-transparent">
+                <Button variant="outline" size="sm" className="h-9 bg-transparent">
                   <Filter className="h-4 w-4 mr-1" />
                   Providers
                   {activeFilters.length > 0 && (
@@ -423,38 +262,17 @@ export default function PricingTable() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isLoading} className="h-9 bg-transparent">
-                  <SlidersHorizontal className="h-4 w-4 mr-1" />
-                  Columns
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {columns.map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={visibleColumns.includes(column.id)}
-                    onCheckedChange={() => toggleColumn(column.id)}
-                    disabled={column.always}
-                  >
-                    {column.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
 
         {/* Filter Toggles */}
-        <div className="flex flex-col md:flex-row gap-2">
+        <div className="flex flex-col md:flex-row md:justify-between gap-2">
           <div className="flex gap-2">
             <Button
               variant={filterOutFree ? "default" : "outline"}
               size="sm"
               onClick={() => setFilterOutFree(!filterOutFree)}
-              disabled={isLoading}
+
               className="h-8 text-xs"
             >
               <Zap className="h-3 w-3 mr-1" />
@@ -464,7 +282,7 @@ export default function PricingTable() {
               variant={showDescriptions ? "default" : "outline"}
               size="sm"
               onClick={() => setShowDescriptions(!showDescriptions)}
-              disabled={isLoading}
+
               className="h-8 text-xs"
             >
               {showDescriptions ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
@@ -480,7 +298,7 @@ export default function PricingTable() {
                 size="sm"
                 onClick={() => requestSort("inputCost")}
                 className="h-8 text-xs"
-                disabled={isLoading}
+
               >
                 Input Cost {sortConfig.key === "inputCost" && renderSortIndicator("inputCost")}
               </Button>
@@ -489,7 +307,7 @@ export default function PricingTable() {
                 size="sm"
                 onClick={() => requestSort("outputCost")}
                 className="h-8 text-xs"
-                disabled={isLoading}
+
               >
                 Output Cost {sortConfig.key === "outputCost" && renderSortIndicator("outputCost")}
               </Button>
@@ -498,19 +316,12 @@ export default function PricingTable() {
                 size="sm"
                 onClick={() => requestSort("imageCost")}
                 className="h-8 text-xs"
-                disabled={isLoading}
+
               >
                 Image Cost {sortConfig.key === "imageCost" && renderSortIndicator("imageCost")}
               </Button>
             </div>
           </div>
-
-          {(activeFilters.length > 0 || searchQuery || filterOutFree) && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
-              <X className="h-3 w-3 mr-1" />
-              Clear
-            </Button>
-          )}
         </div>
       </div>
 
@@ -521,57 +332,7 @@ export default function PricingTable() {
       )}
 
       {/* Content */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {isMobile ? (
-            <div className="grid gap-3">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Card key={index} className="p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-4 w-4" />
-                      <Skeleton className="h-4 w-32" />
-                    </div>
-                    <Skeleton className="h-3 w-20" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <Skeleton className="h-3 w-16" />
-                      <Skeleton className="h-3 w-16" />
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden bg-white dark:bg-gray-950">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-900">
-                    {columns.map(
-                      (column) =>
-                        visibleColumns.includes(column.id) && (
-                          <TableHead key={column.id} className="h-10 text-xs font-medium">
-                            {column.label}
-                          </TableHead>
-                        ),
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: 8 }).map((_, index) => (
-                    <TableRow key={index}>
-                      {visibleColumns.map((column) => (
-                        <TableCell key={column} className="h-12">
-                          <Skeleton className="h-3 w-full" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      ) : isMobile ? (
+      {isMobile ? (
         <div className="space-y-3">
           {displayedModels.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -611,30 +372,24 @@ export default function PricingTable() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm pl-7">
-                    {visibleColumns.includes("inputCost") && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Input:</span>
-                        <span className="font-mono text-xs">{model.inputCost}</span>
-                      </div>
-                    )}
-                    {visibleColumns.includes("outputCost") && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Output:</span>
-                        <span className="font-mono text-xs">{model.outputCost}</span>
-                      </div>
-                    )}
-                    {visibleColumns.includes("contextWindow") && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Context:</span>
-                        <span className="font-mono text-xs">{model.contextWindow}</span>
-                      </div>
-                    )}
-                    {visibleColumns.includes("imageCost") && model.imageCost !== "N/A" && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Image:</span>
-                        <span className="font-mono text-xs">{model.imageCost}</span>
-                      </div>
-                    )}
+
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">Input:</span>
+                      <span className="font-mono text-xs">{model.inputCost}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">Output:</span>
+                      <span className="font-mono text-xs">{model.outputCost}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">Context:</span>
+                      <span className="font-mono text-xs">{model.contextWindow}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs">Image:</span>
+                      <span className="font-mono text-xs">{model.imageCost}</span>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -695,81 +450,59 @@ export default function PricingTable() {
                       index % 2 === 0 ? "bg-gray-50/30 dark:bg-gray-900/20" : "",
                     )}
                   >
-                    {visibleColumns.includes("keep") && (
-                      <TableCell className="w-12">
-                        <Checkbox
-                          id={`keep-${model.id}`}
-                          checked={model.keep}
-                          onCheckedChange={() => toggleKeep(model.id)}
-                        />
-                      </TableCell>
-                    )}
-                    {visibleColumns.includes("name") && (
-                      <TableCell className="max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <TooltipProvider>
-                            <Tooltip delayDuration={0}>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyToClipboard(model.id)}
-                                  className="h-6 w-6 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Copy model ID</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          {renderModelName(model)}
-                        </div>
-                      </TableCell>
-                    )}
-                    {visibleColumns.includes("provider") && (
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {model.provider}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    {visibleColumns.includes("contextWindow") && (
-                      <TableCell className="font-mono text-xs">{model.contextWindow}</TableCell>
-                    )}
-                    {visibleColumns.includes("inputCost") && (
-                      <TableCell className="font-mono text-xs font-medium">{model.inputCost}</TableCell>
-                    )}
-                    {visibleColumns.includes("outputCost") && (
-                      <TableCell className="font-mono text-xs font-medium">{model.outputCost}</TableCell>
-                    )}
-                    {visibleColumns.includes("imageCost") && (
-                      <TableCell className="font-mono text-xs">{model.imageCost}</TableCell>
-                    )}
-                    {visibleColumns.includes("modalities") && (
-                      <TableCell className="text-xs">{model.modalities.join(", ")}</TableCell>
-                    )}
-                    {visibleColumns.includes("input_cache_read") && (
-                      <TableCell className="font-mono text-xs">{model.input_cache_read}</TableCell>
-                    )}
-                    {visibleColumns.includes("input_cache_write") && (
-                      <TableCell className="font-mono text-xs">{model.input_cache_write}</TableCell>
-                    )}
-                    {visibleColumns.includes("features") && (
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {model.features.slice(0, 3).map((feature, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-xs h-5">
-                              {feature}
-                            </Badge>
-                          ))}
-                          {model.features.length > 3 && (
-                            <Badge variant="outline" className="text-xs h-5">
-                              +{model.features.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="w-12">
+                      <Checkbox
+                        id={`keep-${model.id}`}
+                        checked={model.keep}
+                        onCheckedChange={() => toggleKeep(model.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-xs">
+                      <div className="flex items-center gap-2">
+                        <TooltipProvider>
+                          <Tooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(model.id)}
+                                className="h-6 w-6 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Copy model ID</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        {renderModelName(model)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {model.provider}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{model.contextWindow}</TableCell>
+                    <TableCell className="font-mono text-xs font-medium">{model.inputCost}</TableCell>
+                    <TableCell className="font-mono text-xs font-medium">{model.outputCost}</TableCell>
+                    <TableCell className="font-mono text-xs">{model.imageCost}</TableCell>
+                    <TableCell className="text-xs">{model.modalities.join(", ")}</TableCell>
+                    <TableCell className="font-mono text-xs">{model.input_cache_read}</TableCell>
+                    <TableCell className="font-mono text-xs">{model.input_cache_write}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {model.features.slice(0, 3).map((feature, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs h-5">
+                            {feature}
+                          </Badge>
+                        ))}
+                        {model.features.length > 3 && (
+                          <Badge variant="outline" className="text-xs h-5">
+                            +{model.features.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -811,11 +544,9 @@ export default function PricingTable() {
             <Sparkles className="h-3 w-3" />
             OpenRouter API
           </span>
-          {lastUpdated && (
-            <span className="bg-white/60 dark:bg-black/20 px-2 py-1 rounded-md">
-              Updated: {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
+          <span className="bg-white/60 dark:bg-black/20 px-2 py-1 rounded-md">
+            Updated: {lastUpdated.toLocaleTimeString()}
+          </span>
         </div>
       </div>
     </div>
