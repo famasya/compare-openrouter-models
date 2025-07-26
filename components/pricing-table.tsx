@@ -1,6 +1,6 @@
 "use client"
 
-import { ModelData } from "@/app/fetcher"
+import { fetchModels, ModelData } from "@/app/fetcher"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import {
   EyeOff,
   Filter,
   Github,
+  Loader2,
   Plus,
   Search,
   Sparkles,
@@ -49,12 +50,8 @@ const columns = [
 
 const MODELS_PER_PAGE = 15
 
-type Props = {
-  data: ModelData[];
-  lastUpdated: Date;
-}
-export default function PricingTable({ data, lastUpdated }: Props) {
-  const [modelData, setModelData] = useState<ModelData[]>(data)
+export default function PricingTable() {
+  const [modelData, setModelData] = useState<ModelData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [visibleColumns, setVisibleColumns] = useState(columns.map((col) => col.id))
@@ -68,6 +65,20 @@ export default function PricingTable({ data, lastUpdated }: Props) {
   const [displayLimit, setDisplayLimit] = useState(MODELS_PER_PAGE)
   const [showDescriptions, setShowDescriptions] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [fetching, setFetching] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState("")
+
+  // Fetch models
+  useEffect(() => {
+    fetchModels().then((models) => {
+      setModelData(models)
+    }).catch((error) => {
+      setError(error.message)
+    }).finally(() => {
+      setFetching(false)
+      setLastUpdate(new Date().toLocaleString())
+    })
+  }, [])
 
   // Custom debounce effect
   useEffect(() => {
@@ -434,10 +445,17 @@ export default function PricingTable({ data, lastUpdated }: Props) {
               {displayedModels.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={visibleColumns.length} className="text-center py-12">
-                    <div className="text-muted-foreground">
-                      <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No models found matching your criteria</p>
-                    </div>
+                    {fetching ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-50 animate-spin" />
+                        <p>Loading models...</p>
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No models found matching your criteria</p>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -545,7 +563,7 @@ export default function PricingTable({ data, lastUpdated }: Props) {
             OpenRouter API
           </span>
           <span className="bg-white/60 dark:bg-black/20 px-2 py-1 rounded-md">
-            Updated: {lastUpdated.toLocaleTimeString()}
+            Updated: {lastUpdate}
           </span>
         </div>
       </div>

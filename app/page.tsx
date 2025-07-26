@@ -1,10 +1,8 @@
 import PricingTable from "@/components/pricing-table"
 import { Button } from "@/components/ui/button"
 import { ExternalLink, Github } from "lucide-react"
-import { fetchModels } from "./fetcher"
 
 export default async function Home() {
-  const models = await fetchModels()
   return (
     <main className="flex min-h-screen flex-col items-center p-4 md:p-8">
       <div className="w-full space-y-6">
@@ -42,7 +40,7 @@ export default async function Home() {
             </a>
           </div>
         </div>
-        <PricingTable data={models} lastUpdated={new Date()} />
+        <PricingTable />
       </div>
     </main>
   )

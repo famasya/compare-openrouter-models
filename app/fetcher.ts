@@ -99,7 +99,6 @@ export const fetchModels = async () => {
   }
   const data: OpenRouterResponse = await response.json()
 
-
   const transformedData: ModelData[] = data.data.map((model) => {
     const providerFromId = model.id.split("/")[0]
     const provider = capitalizeFirstLetter(providerFromId)
